@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Gissues</string>
+    <string name="prog_title">Obtaining Issues</string>
+    <string name="prog_descr">Loading</string>
+</resources>
