@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.ProgressDialog;
 import android.arch.lifecycle.ViewModelProvider;
 import android.content.Context;
+import android.databinding.DataBindingUtil;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.DividerItemDecoration;
@@ -11,8 +12,10 @@ import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.Button;
 import android.widget.EditText;
 
+import com.codingwords.sobrien.gissues.databinding.ActivityMainBinding;
 import com.codingwords.sobrien.gissues.entity.Issue;
 import com.codingwords.sobrien.gissues.ui.GissuesAdapter;
 import com.codingwords.sobrien.gissues.vm.GissuesViewModel;
@@ -23,43 +26,39 @@ import javax.inject.Inject;
  * Created by Administrator on 2/19/2018.
  */
 
-import android.app.ProgressDialog;
-import android.arch.lifecycle.ViewModelProvider;
 import android.arch.lifecycle.ViewModelProviders;
 import android.os.Bundle;
-import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.inputmethod.EditorInfo;
-import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import com.codingwords.sobrien.gissues.GissuesApp;
-import com.codingwords.sobrien.gissues.ui.GissuesAdapter;
-import com.codingwords.sobrien.gissues.vm.GissuesViewModel;
-
 import java.util.List;
 
-import javax.inject.Inject;
 
 /**
  * Created by Administrator on 2/19/2018.
  */
 
-public class MainActivity  extends AppCompatActivity{
+public class MainActivity  extends AppCompatActivity implements GissuesScreen {
 
     private static String TAG = MainActivity.class.getSimpleName();
+
+    ActivityMainBinding dataBinding;
 
     private GissuesViewModel viewModel;
     @Inject
     ViewModelProvider.Factory viewModelFactory;
 
-    private EditText repoEditText;
+    private EditText etOwnerName;
+    private EditText etRepoName;
+
 
     private GissuesAdapter gissuesAdapter;
 
     private ProgressDialog progDialog;
+
+    private Button searchBtn;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,35 +67,36 @@ public class MainActivity  extends AppCompatActivity{
 
         ((GissuesApp) getApplication()).getAppComp().inject(this);
         viewModel = ViewModelProviders.of(this, viewModelFactory).get(GissuesViewModel.class);
+        viewModel.setGissuesScreen(this);
+        dataBinding = DataBindingUtil.setContentView(this, R.layout.activity_main);
+        dataBinding.setData(viewModel);
         updateView();
 
-        repoEditText.setOnEditorActionListener((TextView v, int actionId, KeyEvent event) -> {
-            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                String repo = repoEditText.getText().toString();
-                if (repo.length() > 0) {
-                    String[] query = repo.split("/");
-                    if (query.length == 2) {
-                        hideSoftKeyboard(MainActivity.this, v);
-                        updateProgress(true);
-                        viewModel.pullIssues(query[0], query[1]);
-                    } else {
-                        processError(new Exception(
-                                "Error check format should be owner/repo")
-                        );
-                    }
-                } else {
-                    processError(new Exception(
-                            "Repository name cannot be empty")
-                    );
+        searchBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                String owner = etOwnerName.getText().toString();
+                Boolean isValid = true;
+                if (owner.length() <2) {
+                    Toast.makeText(MainActivity.this,"Must provide repository owner!", Toast.LENGTH_LONG);
+                    isValid = false;
                 }
-                return true;
+                String repo = etRepoName.getText().toString();
+
+                if (repo.length() <2) {
+                    Toast.makeText(MainActivity.this,"Must provide repository name!", Toast.LENGTH_LONG);
+                    isValid = false;
+                }
+
+                if (isValid == true){
+                    viewModel.pullIssues(owner, repo);
+                    updateProgress(true);
+                }
+
             }
-            return false;
         });
 
-
         viewModel.getGapiResponse().observe(this, gapiResponse -> {
-            Log.d(TAG, "observe called()");
             if (gapiResponse.getError() == null) {
                 processResponse(gapiResponse.getIssues());
 
@@ -108,7 +108,10 @@ public class MainActivity  extends AppCompatActivity{
 
     private void updateView() {
         RecyclerView recyclerView = (RecyclerView) findViewById(R.id.issueList);
-        repoEditText = (EditText) findViewById(R.id.repo_selector);
+        searchBtn = (Button)findViewById(R.id.btn_search);
+        etOwnerName = (EditText) findViewById(R.id.owner_name);
+        etRepoName = (EditText) findViewById(R.id.repo_name);
+        //dataBinding.btnRegister.setOnClickListener(this);
 
         progDialog = new ProgressDialog(MainActivity.this);
         progDialog.setIndeterminate(true);
@@ -122,11 +125,12 @@ public class MainActivity  extends AppCompatActivity{
         recyclerView.setLayoutManager(new LinearLayoutManager(
                 this, LinearLayoutManager.VERTICAL, false)
         );
-        recyclerView.hasFixedSize();
+
         recyclerView.setItemAnimator(new DefaultItemAnimator());
         DividerItemDecoration mDividerItemDecoration = new DividerItemDecoration(
                 recyclerView.getContext(), LinearLayoutManager.VERTICAL
         );
+        recyclerView.hasFixedSize();
         recyclerView.addItemDecoration(mDividerItemDecoration);
         gissuesAdapter = new GissuesAdapter(getLayoutInflater());
         recyclerView.setAdapter(gissuesAdapter);
@@ -138,11 +142,7 @@ public class MainActivity  extends AppCompatActivity{
             gissuesAdapter.addGissues(issues);
         } else {
             gissuesAdapter.clearGissues();
-            Toast.makeText(
-                    this,
-                    "No issues found!",
-                    Toast.LENGTH_SHORT
-            ).show();
+            showIssuesNotFound();
         }
     }
 
@@ -170,4 +170,23 @@ public class MainActivity  extends AppCompatActivity{
         }
     }
 
+    @Override
+    public void showToast(String msg) {
+        Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show();
+    }
+
+    @Override
+    public void showOwnerError() {
+        showToast("Must provide repository owner!");
+    }
+
+    @Override
+    public void showRepoError() {
+         showToast("Must provide repository name!");
+    }
+
+    @Override
+    public void showIssuesNotFound() {
+         showToast("No issues found!");
+    }
 }

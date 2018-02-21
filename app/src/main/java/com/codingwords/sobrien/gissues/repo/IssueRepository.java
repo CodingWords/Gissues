@@ -45,4 +45,12 @@ public class IssueRepository implements IssueRepo {
         });
         return lData;
     }
+
+    public GAPIService getGapiService() {
+        return gapiService;
+    }
+
+    public void setGapiService(GAPIService gapiService) {
+        this.gapiService = gapiService;
+    }
 }
